@@ -1,0 +1,229 @@
+{
+  "entities": {
+    "HourlyLog": {
+      "title": "HourlyLog",
+      "description": "Tracks a single hour of cognitive activity, screen time, and physical motion state for a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated user owning this log",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "dateKey": {
+          "type": "string",
+          "description": "ISO date string YYYY-MM-DD",
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "hour": {
+          "type": "number",
+          "description": "Hour of day from 0 to 23"
+        },
+        "activity": {
+          "type": "string",
+          "description": "Primary activity description for this hour",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "cognitiveState": {
+          "type": "string",
+          "description": "Cognitive classification of the hour",
+          "enum": ["deep_focus", "shallow_work", "creative", "learning", "recovery", "distracted"]
+        },
+        "screenMinutes": {
+          "type": "number",
+          "description": "Total screen time minutes during this hour (0 to 60)"
+        },
+        "productiveScreenMinutes": {
+          "type": "number",
+          "description": "Productive screen time minutes during this hour (0 to 60)"
+        },
+        "motionState": {
+          "type": "string",
+          "description": "Physical motion posture or activity during this hour",
+          "enum": ["sedentary", "standing", "walking", "workout"]
+        },
+        "stepsCount": {
+          "type": "number",
+          "description": "Estimated or tracked steps during this hour (0 to 15000)"
+        },
+        "energyLevel": {
+          "type": "number",
+          "description": "Subjective cognitive energy rating from 1 to 5"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional context notes or MiniMe efficiency insight",
+          "maxLength": 400
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": [
+        "userId",
+        "dateKey",
+        "hour",
+        "activity",
+        "cognitiveState",
+        "screenMinutes",
+        "productiveScreenMinutes",
+        "motionState",
+        "stepsCount",
+        "energyLevel",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "DailyGoal": {
+      "title": "DailyGoal",
+      "description": "Tracks a daily or weekly cognitive, screen-time, or motion goal.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated user owning this goal",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Goal title",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "category": {
+          "type": "string",
+          "description": "Goal domain category",
+          "enum": ["deep_work", "screen_hygiene", "motion", "habit"]
+        },
+        "targetValue": {
+          "type": "number",
+          "description": "Numerical target value"
+        },
+        "currentValue": {
+          "type": "number",
+          "description": "Current progress value"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit of measurement (hrs, mins, steps, sessions)",
+          "maxLength": 24
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Whether the goal is achieved for the day"
+        },
+        "priority": {
+          "type": "string",
+          "description": "Priority level",
+          "enum": ["high", "medium", "low"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": [
+        "userId",
+        "title",
+        "category",
+        "targetValue",
+        "currentValue",
+        "unit",
+        "completed",
+        "priority",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "McpConnector": {
+      "title": "McpConnector",
+      "description": "Stores configuration for an external MCP server or agent bridge (MiniMe, Codegen, WhatsApp Agent).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated user owning this connector",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Connector display name",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "provider": {
+          "type": "string",
+          "description": "Agent or MCP provider type",
+          "enum": ["minime", "codegen", "whatsapp", "custom_mcp"]
+        },
+        "endpointUrl": {
+          "type": "string",
+          "description": "MCP Server SSE/JSON-RPC URL or webhook bridge endpoint",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether automatic telemetry extraction is active"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update"
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "provider",
+        "endpointUrl",
+        "enabled",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/hourly_logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/HourlyLog"
+      },
+      "description": "Stores hourly cognitive, screen time, and motion logs per user."
+    },
+    "/daily_goals/{goalId}": {
+      "schema": {
+        "$ref": "#/entities/DailyGoal"
+      },
+      "description": "Stores daily cognitive, screen hygiene, and motion goals per user."
+    },
+    "/mcp_connectors/{connectorId}": {
+      "schema": {
+        "$ref": "#/entities/McpConnector"
+      },
+      "description": "Stores MCP server and agent integrations per user."
+    }
+  }
+}

@@ -1,0 +1,154 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidHourlyLog(data) {
+      return data.keys().hasAll([
+          'userId', 'dateKey', 'hour', 'activity', 'cognitiveState',
+          'screenMinutes', 'productiveScreenMinutes', 'motionState',
+          'stepsCount', 'energyLevel', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'dateKey', 'hour', 'activity', 'cognitiveState',
+          'screenMinutes', 'productiveScreenMinutes', 'motionState',
+          'stepsCount', 'energyLevel', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.userId == request.auth.uid
+        && data.dateKey is string && data.dateKey.size() == 10 && data.dateKey.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && data.hour is int && data.hour >= 0 && data.hour <= 23
+        && data.activity is string && data.activity.size() >= 1 && data.activity.size() <= 160
+        && data.cognitiveState is string && data.cognitiveState.size() <= 32
+        && data.cognitiveState in ['deep_focus', 'shallow_work', 'creative', 'learning', 'recovery', 'distracted']
+        && data.screenMinutes is number && data.screenMinutes >= 0 && data.screenMinutes <= 60
+        && data.productiveScreenMinutes is number && data.productiveScreenMinutes >= 0 && data.productiveScreenMinutes <= 60
+        && data.productiveScreenMinutes <= data.screenMinutes
+        && data.motionState is string && data.motionState.size() <= 32
+        && data.motionState in ['sedentary', 'standing', 'walking', 'workout']
+        && data.stepsCount is number && data.stepsCount >= 0 && data.stepsCount <= 15000
+        && data.energyLevel is number && data.energyLevel >= 1 && data.energyLevel <= 5
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 400))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDailyGoal(data) {
+      return data.keys().hasAll([
+          'userId', 'title', 'category', 'targetValue', 'currentValue',
+          'unit', 'completed', 'priority', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'title', 'category', 'targetValue', 'currentValue',
+          'unit', 'completed', 'priority', 'createdAt', 'updatedAt'
+        ])
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.userId == request.auth.uid
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.category is string && data.category.size() <= 32
+        && data.category in ['deep_work', 'screen_hygiene', 'motion', 'habit']
+        && data.targetValue is number && data.targetValue >= 0 && data.targetValue <= 100000
+        && data.currentValue is number && data.currentValue >= 0 && data.currentValue <= 100000
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 24
+        && data.completed is bool
+        && data.priority is string && data.priority.size() <= 16
+        && data.priority in ['high', 'medium', 'low']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMcpConnector(data) {
+      return data.keys().hasAll([
+          'userId', 'name', 'provider', 'endpointUrl', 'enabled', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'name', 'provider', 'endpointUrl', 'enabled', 'createdAt', 'updatedAt'
+        ])
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.userId == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && data.provider is string && data.provider.size() <= 32
+        && data.provider in ['minime', 'codegen', 'whatsapp', 'custom_mcp']
+        && data.endpointUrl is string && data.endpointUrl.size() >= 1 && data.endpointUrl.size() <= 256
+        && data.enabled is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /hourly_logs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(logId)
+        && isValidHourlyLog(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(logId)
+        && isValidHourlyLog(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && (incoming().createdAt == existing().createdAt || incoming().createdAt == request.time)
+        && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(logId) && existing().userId == request.auth.uid;
+    }
+
+    match /daily_goals/{goalId} {
+      allow get: if isSignedIn() && isValidId(goalId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(goalId)
+        && isValidDailyGoal(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(goalId)
+        && isValidDailyGoal(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && (incoming().createdAt == existing().createdAt || incoming().createdAt == request.time)
+        && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(goalId) && existing().userId == request.auth.uid;
+    }
+
+    match /mcp_connectors/{connectorId} {
+      allow get: if isSignedIn() && isValidId(connectorId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(connectorId)
+        && isValidMcpConnector(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(connectorId)
+        && isValidMcpConnector(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && (incoming().createdAt == existing().createdAt || incoming().createdAt == request.time)
+        && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(connectorId) && existing().userId == request.auth.uid;
+    }
+  }
+}
