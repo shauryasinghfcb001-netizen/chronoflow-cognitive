@@ -63,6 +63,7 @@ export const ScaleSectionView: React.FC<ScaleSectionViewProps> = ({
   onApplyTemplate,
 }) => {
   const [subView, setSubView] = useState<'scale' | 'timer' | 'goals'>('scale');
+  const [showFull24Hours, setShowFull24Hours] = useState<boolean>(false);
   const [quickHour, setQuickHour] = useState<number>(18);
   const [quickActivity, setQuickActivity] = useState<string>('');
   const [quickState, setQuickState] = useState<CognitiveState>('deep_focus');
@@ -263,112 +264,122 @@ export const ScaleSectionView: React.FC<ScaleSectionViewProps> = ({
           />
 
           {/* Dual-Track 24-Hour Energy & Motion Intensity Heatmap */}
-          <HourlyEnergyMotionHeatmap
-            entries={entries}
-            onSelectHour={(hr) => {
-              const found = entries.find((e) => e.hour === hr);
-              onEditHour(hr, found);
-            }}
-          />
-
-          {/* Quick Inline Hourly Scale Logger */}
-          <form
-            onSubmit={handleQuickSubmit}
-            className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col gap-3 sm:flex-row sm:items-center"
-          >
-            <div className="flex items-center gap-2 shrink-0">
-              <Sparkles className="h-4 w-4 text-slate-500" />
-              <label htmlFor="scale-quick-hour" className="sr-only">
-                Hour
-              </label>
-              <select
-                id="scale-quick-hour"
-                value={quickHour}
-                onChange={(e) => setQuickHour(Number(e.target.value))}
-                className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 font-mono tabular-nums text-xs text-slate-900"
-              >
-                {Array.from({ length: 24 }, (_, h) => (
-                  <option key={h} value={h}>
-                    {formatHourLabel(h)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <input
-              type="text"
-              value={quickActivity}
-              onChange={(e) => setQuickActivity(e.target.value)}
-              placeholder="Quick log hour into scale (e.g., Deep system coding, 30m walk)..."
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-slate-900 focus:outline-none"
-            />
-
-            <div className="flex items-center gap-2 shrink-0">
-              <select
-                aria-label="Cognitive Mode"
-                value={quickState}
-                onChange={(e) => setQuickState(e.target.value as CognitiveState)}
-                className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs text-slate-800"
-              >
-                {(Object.keys(COGNITIVE_STATE_META) as CognitiveState[]).map((k) => (
-                  <option key={k} value={k}>
-                    {COGNITIVE_STATE_META[k].label}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                aria-label="Motion State"
-                value={quickMotion}
-                onChange={(e) => setQuickMotion(e.target.value as MotionState)}
-                className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 text-xs text-slate-800"
-              >
-                {(Object.keys(MOTION_STATE_META) as MotionState[]).map((m) => (
-                  <option key={m} value={m}>
-                    {MOTION_STATE_META[m].label}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="number"
-                min={0}
-                max={60}
-                value={quickScreen}
-                onChange={(e) => setQuickScreen(Number(e.target.value))}
-                aria-label="Screen minutes"
-                className="w-14 rounded-lg border border-slate-300 bg-slate-50 px-2 py-2 font-mono tabular-nums text-xs text-slate-900"
-              />
-
+          <div className="space-y-2">
+            <div className="flex items-center justify-end">
               <button
-                type="submit"
-                className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0"
+                type="button"
+                onClick={() => setShowFull24Hours((prev) => !prev)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
               >
-                <Plus className="h-3.5 w-3.5" />
-                Add
+                {showFull24Hours ? 'Show 16h Waking Window (07:00–22:00)' : 'Show Full 24h Day (00:00–23:00)'}
               </button>
             </div>
-          </form>
+            <HourlyEnergyMotionHeatmap
+              entries={entries}
+              showFull24Hours={showFull24Hours}
+              onSelectHour={(hr) => {
+                const found = entries.find((e) => e.hour === hr);
+                onEditHour(hr, found);
+              }}
+            />
+          </div>
 
-          {/* Interactive Hourly Scale Calibration Table */}
+          {/* Interactive Hourly Scale Calibration Table + Quick-Add Activity */}
           <section className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
               <div>
                 <h2 className="text-sm font-semibold text-slate-900">
-                  Hourly Energy Scale & Productivity Breakdown ({sortedEntries.length} hours)
+                  Daily Activity & Energy Calibration ({sortedEntries.length} sessions)
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Click any 1–5 energy button to recalibrate an hour’s energy scale in real time
+                  Click any 1–5 energy rating to recalibrate your daily efficiency scale or add an hour below
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onEditHour(new Date().getHours())}
-                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-100 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors"
               >
-                + Full Hour Modal
+                <Plus className="h-3.5 w-3.5" />
+                Log Hour Block
               </button>
             </div>
+
+            {/* Quick-Add Inline Activity Form */}
+            <form
+              onSubmit={handleQuickSubmit}
+              className="grid grid-cols-1 gap-2.5 border-b border-slate-100 bg-slate-50/70 px-5 py-3 sm:grid-cols-12"
+            >
+              <div className="sm:col-span-2">
+                <select
+                  aria-label="Quick add hour"
+                  value={quickHour}
+                  onChange={(e) => setQuickHour(Number(e.target.value))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono tabular-nums text-xs text-slate-900"
+                >
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>
+                      {formatHourLabel(h)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-4">
+                <input
+                  type="text"
+                  value={quickActivity}
+                  onChange={(e) => setQuickActivity(e.target.value)}
+                  placeholder="Quick-add activity for this hour..."
+                  aria-label="Quick add activity description"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-400"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <select
+                  aria-label="Quick add cognitive state"
+                  value={quickState}
+                  onChange={(e) => setQuickState(e.target.value as CognitiveState)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+                >
+                  {(Object.keys(COGNITIVE_STATE_META) as CognitiveState[]).map((k) => (
+                    <option key={k} value={k}>
+                      {COGNITIVE_STATE_META[k].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <select
+                  aria-label="Quick add motion state"
+                  value={quickMotion}
+                  onChange={(e) => setQuickMotion(e.target.value as MotionState)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+                >
+                  {(Object.keys(MOTION_STATE_META) as MotionState[]).map((m) => (
+                    <option key={m} value={m}>
+                      {MOTION_STATE_META[m].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={quickScreen}
+                  onChange={(e) => setQuickScreen(Number(e.target.value))}
+                  aria-label="Quick add screen minutes"
+                  className="w-14 rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-mono tabular-nums text-xs text-slate-900"
+                />
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            </form>
 
             <div className="divide-y divide-slate-200">
               {sortedEntries.map((entry) => {

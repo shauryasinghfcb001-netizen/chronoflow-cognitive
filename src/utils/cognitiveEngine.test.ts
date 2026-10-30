@@ -15,6 +15,7 @@ import {
   validateSafeMapsUri,
   normalizeCognitiveState,
   normalizeMotionState,
+  parseRawTelemetryToBlocks,
   DEFAULT_GPS_WAYPOINTS,
   formatHourLabel,
   CURATED_DAY_TEMPLATES,
@@ -275,3 +276,53 @@ test('buildWeeklyCognitiveTrend aggregates deep_focus vs distracted hours across
   assert.equal(summary.trendDirection, 'improving');
   assert.ok(summary.totalDeepFocusHours > summary.totalDistractedHours);
 });
+
+test('parseRawTelemetryToBlocks extracts real structured blocks from MiniMe JSON, GitHub commits, and WhatsApp chat exports', () => {
+  // 1. MiniMe / ActivityWatch JSON array
+  const minimeJson = JSON.stringify([
+    {
+      timestamp: '2026-10-29T09:15:00',
+      duration: 3240,
+      data: { app: 'VS Code', title: 'server.ts - Multi-Agent MCP Bridge' },
+    },
+    {
+      timestamp: '2026-10-29T14:10:00',
+      duration: 2400,
+      data: { app: 'Chrome', title: 'YouTube Video Feed' },
+    },
+  ]);
+  const minimeBlocks = parseRawTelemetryToBlocks(minimeJson, 'minime', 'MiniMe Screen Agent');
+  assert.equal(minimeBlocks.length, 2);
+  assert.equal(minimeBlocks[0].hour, 9);
+  assert.equal(minimeBlocks[0].cognitiveState, 'deep_focus');
+  assert.equal(minimeBlocks[1].hour, 14);
+  assert.equal(minimeBlocks[1].cognitiveState, 'distracted');
+
+  // 2. GitHub / Codex Commit JSON
+  const githubCommits = JSON.stringify([
+    {
+      sha: '9f8e7d6c5b4a',
+      commit: {
+        author: { date: '2026-10-29T10:30:00' },
+        message: 'feat(mcp): implement parallel multi-agent extractor\n\nDetails here',
+      },
+    },
+  ]);
+  const codexBlocks = parseRawTelemetryToBlocks(githubCommits, 'codegen', 'Codex Agent');
+  assert.equal(codexBlocks.length, 1);
+  assert.equal(codexBlocks[0].hour, 10);
+  assert.match(codexBlocks[0].activity, /9f8e7d6/);
+
+  // 3. WhatsApp Chat Export lines
+  const whatsappExport = [
+    '[10/29/26, 11:00 AM] User: 50m Figma UI design review and component architecture',
+    '[10/29/26, 12:30 PM] User: 35m outdoor walk along waterfront trail',
+  ].join('\n');
+  const waBlocks = parseRawTelemetryToBlocks(whatsappExport, 'whatsapp', 'WhatsApp Agent');
+  assert.equal(waBlocks.length, 2);
+  assert.equal(waBlocks[0].hour, 11);
+  assert.equal(waBlocks[0].cognitiveState, 'creative');
+  assert.equal(waBlocks[1].hour, 12);
+  assert.equal(waBlocks[1].motionState, 'walking');
+});
+

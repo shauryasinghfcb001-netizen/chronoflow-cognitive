@@ -7,7 +7,7 @@ import {
 
 interface HourlyEnergyMotionHeatmapProps {
   entries: HourlyEntry[];
-  showFull24Hours: boolean;
+  showFull24Hours?: boolean;
   onSelectHour: (hour: number, existing?: HourlyEntry) => void;
 }
 
@@ -45,7 +45,7 @@ function getMotionColorClasses(intensity: number): string {
 
 export const HourlyEnergyMotionHeatmap: React.FC<HourlyEnergyMotionHeatmapProps> = ({
   entries,
-  showFull24Hours,
+  showFull24Hours = false,
   onSelectHour,
 }) => {
   const allCells = computeHourlyHeatmapCells(entries);

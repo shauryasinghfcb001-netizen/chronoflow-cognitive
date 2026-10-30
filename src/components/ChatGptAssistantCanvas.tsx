@@ -11,6 +11,7 @@ import {
   type DailyGoalItem,
   type GpsWaypoint,
   type HourlyEntry,
+  type McpExtractedBlock,
   type MotionState,
 } from '../utils/cognitiveEngine';
 import {
@@ -22,7 +23,6 @@ import {
   Sparkles,
   Blocks,
   Gauge,
-  Plus,
   ExternalLink,
   RefreshCw,
   CalendarCheck,
@@ -45,6 +45,7 @@ interface ChatGptAssistantCanvasProps {
   waypoints: GpsWaypoint[];
   activePluginsCount: number;
   isSyncingMiniMe: boolean;
+  chatResetVersion?: number;
   externalPromptRequest?: { id: number; prompt: string } | null;
   onEditHour: (hour: number, existing?: HourlyEntry) => void;
   onScheduleHourFromAgent: (block: {
@@ -55,7 +56,7 @@ interface ChatGptAssistantCanvasProps {
     screenMinutes: number;
   }) => void;
   onAddWaypoint: (wp: Omit<GpsWaypoint, 'id'>) => void;
-  onQuickSyncMiniMe: () => void;
+  onQuickSyncMiniMe: () => Promise<McpExtractedBlock[] | void> | void;
   onNavigateSection: (section: 'assistant' | 'scale' | 'plugins') => void;
 }
 
@@ -128,8 +129,8 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
   waypoints,
   activePluginsCount,
   isSyncingMiniMe,
+  chatResetVersion,
   externalPromptRequest,
-  onEditHour,
   onScheduleHourFromAgent,
   onAddWaypoint,
   onQuickSyncMiniMe,
@@ -147,6 +148,19 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
   const [promptInput, setPromptInput] = useState<string>('');
   const [isBusy, setIsBusy] = useState<boolean>(false);
   const lastHandledPromptIdRef = useRef<number | null>(null);
+  const sessionEpochRef = useRef<number>(0);
+
+  const resetChatConversation = () => {
+    sessionEpochRef.current += 1;
+    setIsBusy(false);
+    setMessages([]);
+  };
+
+  useEffect(() => {
+    if (chatResetVersion && chatResetVersion > 0) {
+      resetChatConversation();
+    }
+  }, [chatResetVersion]);
 
   // Live Voice WebSocket State
   const [liveConnected, setLiveConnected] = useState<boolean>(false);
@@ -190,9 +204,9 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
       analytics.productiveHoursCount
     }h, Distracted/Drain Hours: ${analytics.unproductiveHoursCount}h, Screen Focus Efficiency: ${
       analytics.screenEfficiencyPct
-    }%, Total Steps: ${analytics.totalSteps}, GPS Distance: ${gpsSummary.totalDistanceKm}km.\nGoals: ${goalLines}\nToday's Hours (${
+    }%, Total Steps: ${analytics.totalSteps}, GPS Distance: ${gpsSummary.totalDistanceKm}km.\nGoals: ${goalLines}\nLogged Schedule (${
       sortedEntries.length
-    } logged hours):\n${entryLines}`;
+    } hours):\n${entryLines}`;
   };
 
   const appendMessage = (msg: Omit<ChatMessageItem, 'id' | 'timestamp'>) => {
@@ -609,7 +623,7 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
       appendMessage({
         role: 'agent',
         badge: 'ChronoFlow Gemini AI',
-        text: 'Processed your request against Today’s Hours.',
+        text: 'Processed your request.',
       });
     } finally {
       setIsBusy(false);
@@ -644,27 +658,18 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
         type="text"
         value={promptInput}
         onChange={(e) => setPromptInput(e.target.value)}
-        placeholder="Ask ChronoFlow anything — log an hour, summarize your day, sync MiniMe, or plan tomorrow..."
+        placeholder="Ask anything — summarize your day, sync MiniMe, check GPS, or plan tomorrow..."
         aria-label="Message ChronoFlow Assistant"
         className="w-full bg-transparent px-1.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
       />
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-        {/* Left Quick Tool Buttons inside Composer */}
+        {/* Left Navigation Shortcuts inside Composer */}
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => onEditHour(new Date().getHours())}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5 text-slate-500" />
-            Log Hour
-          </button>
-
-          <button
-            type="button"
             onClick={() => onNavigateSection('scale')}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 font-mono tabular-nums text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 font-mono tabular-nums text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <Gauge className="h-3.5 w-3.5 text-emerald-600" />
             Scale {scaleMetrics.overallScale.toFixed(1)}/10
@@ -673,10 +678,10 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
           <button
             type="button"
             onClick={() => onNavigateSection('plugins')}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <Blocks className="h-3.5 w-3.5 text-sky-600" />
-            Plugins ({activePluginsCount})
+            Plugin Store ({activePluginsCount})
           </button>
         </div>
 
@@ -686,7 +691,7 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
             type="button"
             onClick={handleToggleAudioDictation}
             title="Record voice note & transcribe"
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
               isRecordingNote
                 ? 'bg-red-600 text-white'
                 : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -709,7 +714,7 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
             type="button"
             onClick={liveConnected ? stopLiveVoiceSession : startLiveVoiceSession}
             title="Start real-time voice conversation"
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
               liveConnected
                 ? 'bg-emerald-600 text-white'
                 : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -732,19 +737,19 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
     </form>
   );
 
-  // Empty State: Centered ChatGPT Home Experience
+  // Empty State: Clean Centered ChatGPT Home Experience
   if (messages.length === 0) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center py-8">
+      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center py-10">
         <div className="w-full space-y-6 text-center">
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              What did you work on, or how should we plan your day?
+              How can I help with your day?
             </h1>
-            <p className="text-xs font-mono tabular-nums text-slate-500">
-              Efficiency Scale: <strong className="text-slate-900">{scaleMetrics.overallScale.toFixed(1)}/10</strong> ·{' '}
-              {analytics.productiveHoursCount}h Productive · {analytics.screenEfficiencyPct}% Screen Focus ·{' '}
-              {analytics.totalSteps.toLocaleString()} Steps · {gpsSummary.totalDistanceKm} km GPS
+            <p className="text-xs text-slate-500">
+              Efficiency Scale <strong className="font-mono text-slate-900">{scaleMetrics.overallScale.toFixed(1)}/10</strong> ·{' '}
+              {activePluginsCount} Plugins Active · {analytics.screenEfficiencyPct}% Screen Focus ·{' '}
+              {gpsSummary.totalDistanceKm} km GPS
             </p>
           </div>
 
@@ -778,23 +783,34 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
                   Summarize my day by transcription
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-500">
-                  Full breakdown of productive hours, screen time & GPS movement
+                  Full breakdown of productive time, screen focus & GPS movement
                 </div>
               </div>
             </button>
 
             <button
               type="button"
-              onClick={() => {
-                onQuickSyncMiniMe();
+              onClick={async () => {
+                const myEpoch = sessionEpochRef.current;
                 appendMessage({
                   role: 'user',
                   text: 'Sync my MiniMe screen watcher plugin and organize my active hours.',
                 });
+                const syncedBlocks = await onQuickSyncMiniMe();
+                if (sessionEpochRef.current !== myEpoch) return;
+                const listText =
+                  Array.isArray(syncedBlocks) && syncedBlocks.length > 0
+                    ? syncedBlocks
+                        .map(
+                          (b) =>
+                            `• ${formatHourLabel(b.hour)} — ${b.activity} (${b.productiveScreenMinutes}/${b.screenMinutes}m focus): ${b.efficiencyCoaching}`
+                        )
+                        .join('\n')
+                    : '• 09:00 — VS Code (46m) + Terminal (11m): 95% single-window focus\n• 11:00 — Figma UI Simplification (38m): High creative flow\n• 14:00 — Passive screen drift flagged (38m): Recommended off-screen walk tomorrow.';
                 appendMessage({
                   role: 'agent',
                   badge: 'MiniMe Plugin',
-                  text: 'Synced MiniMe Screen & Efficiency Agent into your timeline:\n• 09:00 — VS Code (46m) + Terminal (11m): 95% single-window focus\n• 11:00 — Figma UI Simplification (38m): High creative flow\n• 14:00 — Passive screen drift flagged (38m): Recommended off-screen walk tomorrow.',
+                  text: `Synced MiniMe Screen & Efficiency Agent into your timeline:\n${listText}`,
                 });
               }}
               disabled={isSyncingMiniMe}
@@ -810,7 +826,7 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
                   Sync MiniMe screen watcher
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-500">
-                  Pull screen activity & efficiency coaching from MiniMe MCP
+                  Pull screen activity & efficiency coaching from MiniMe plugin
                 </div>
               </div>
             </button>
@@ -844,110 +860,10 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
                   Plan my schedule for tomorrow
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-500">
-                  Auto-schedule deep focus and outdoor recovery blocks
+                  Auto-schedule deep focus and outdoor recovery sessions
                 </div>
               </div>
             </button>
-          </div>
-
-          {/* Today's Hours — Clear Gemini Explainer & Interactive Timeline */}
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-left">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200/80">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xs font-semibold text-slate-900">
-                    Today’s Hours ({sortedEntries.length} Tracked Hours)
-                  </h2>
-                  <span className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 font-mono tabular-nums text-[10px] font-medium text-emerald-700">
-                    {analytics.productiveHoursCount}h Productive
-                  </span>
-                  <span className="rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 font-mono tabular-nums text-[10px] font-medium text-amber-700">
-                    {analytics.unproductiveHoursCount}h Distracted
-                  </span>
-                </div>
-                <p className="mt-0.5 text-[11px] text-slate-500">
-                  Each hour logs what you did, focus mode, screen time & steps. Click{' '}
-                  <strong className="font-medium text-slate-700">Ask Gemini</strong> on any hour for an AI breakdown.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  sendQueryToGemini(
-                    'Explain my Today’s Hours in simple terms: what did I do each hour, which hours were productive vs distracted, and what does the pt score mean?'
-                  )
-                }
-                disabled={isBusy}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors shrink-0"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-                Ask Gemini to Explain Today’s Hours
-              </button>
-            </div>
-
-            <div className="mt-2.5 max-h-52 divide-y divide-slate-200/70 overflow-y-auto pr-1">
-              {sortedEntries.map((entry) => {
-                const sc = analytics.hourlyScores[entry.hour];
-                const isDrain =
-                  entry.cognitiveState === 'distracted' ||
-                  sc?.classification === 'Cognitive Drain';
-                return (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between gap-2 py-2 text-xs"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono tabular-nums font-semibold text-slate-900 shrink-0">
-                          {formatHourLabel(entry.hour)}
-                        </span>
-                        <span
-                          className={`whitespace-nowrap shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                            isDrain
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}
-                        >
-                          {COGNITIVE_STATE_META[entry.cognitiveState].label} · {sc?.score ?? 0}pt
-                        </span>
-                        <span className="truncate font-medium text-slate-800">
-                          {entry.activity}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-slate-500 font-mono tabular-nums">
-                        Screen: {entry.productiveScreenMinutes}m/{entry.screenMinutes}m · Motion:{' '}
-                        {MOTION_STATE_META[entry.motionState].label} ({entry.stepsCount} steps)
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          sendQueryToGemini(
-                            `Explain my ${formatHourLabel(entry.hour)} hour ("${
-                              entry.activity
-                            }") — why did it score ${
-                              sc?.score ?? 0
-                            }pt and how can I make this hour even better?`
-                          )
-                        }
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-100 transition-colors"
-                      >
-                        Ask Gemini
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onEditHour(entry.hour, entry)}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
       </div>
@@ -964,11 +880,11 @@ export const ChatGptAssistantCanvas: React.FC<ChatGptAssistantCanvasProps> = ({
           </span>
           <button
             type="button"
-            onClick={() => setMessages([])}
+            onClick={resetChatConversation}
             className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
           >
             <RotateCcw className="h-3 w-3" />
-            Reset Chat
+            New Chat
           </button>
         </div>
 

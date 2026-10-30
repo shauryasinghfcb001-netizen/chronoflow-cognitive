@@ -1,6 +1,11 @@
 {
   "name": "ChronoFlow — Cognitive & Daily Telemetry Workspace",
   "description": "Hourly cognitive time tracker, screen time analyzer, motion-linked daily habit & goal planner with Notion-inspired templates and focus timer.",
-  "requestFramePermissions": ["microphone", "geolocation"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": [
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

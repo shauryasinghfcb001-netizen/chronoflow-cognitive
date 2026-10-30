@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import {
   collection,
@@ -44,7 +44,10 @@ import {
 } from './utils/cognitiveEngine';
 import { ChatGptAssistantCanvas } from './components/ChatGptAssistantCanvas';
 import { ScaleSectionView } from './components/ScaleSectionView';
-import { PluginStoreSectionView } from './components/PluginStoreSectionView';
+import {
+  PluginStoreSectionView,
+  type SyncExtraOptions,
+} from './components/PluginStoreSectionView';
 import { HourlyLogModal } from './components/HourlyLogModal';
 import {
   Plus,
@@ -79,13 +82,22 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateKey);
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>('ultradian-maker');
+  const [chatResetVersion, setChatResetVersion] = useState<number>(0);
+  const [selectedPluginId, setSelectedPluginId] = useState<string>('mcp-minime');
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTo({ top: 0 });
+    }
+  }, [activeSection]);
 
   // Auth & Cloud State
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [externalPromptRequest, setExternalPromptRequest] = useState<{
+  const [externalPromptRequest] = useState<{
     id: number;
     prompt: string;
   } | null>(null);
@@ -139,7 +151,20 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_MCP_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const normalized = parsed.map((c: McpConnectorItem) =>
+            c.id === 'mcp-codegen'
+              ? {
+                  ...c,
+                  name: 'Codex / Codegen Autonomous Dev Agent',
+                  githubTarget: c.githubTarget || 'modelcontextprotocol/servers',
+                }
+              : c
+          );
+          const existingIds = new Set(normalized.map((c: McpConnectorItem) => c.id));
+          const missingDefaults = DEFAULT_MCP_CONNECTORS.filter((d) => !existingIds.has(d.id));
+          return [...normalized, ...missingDefaults];
+        }
       }
     } catch {
       // ignore
@@ -361,7 +386,16 @@ export default function App() {
     }
   };
 
-  const handleSyncMcpConnector = async (connector: McpConnectorItem) => {
+  const handleIngestExtractedBlocks = (blocks: McpExtractedBlock[]) => {
+    if (!Array.isArray(blocks) || blocks.length === 0) return;
+    setRecentExtracted((prev) => [...blocks, ...prev].slice(0, 16));
+    setLocalEntries((prev) => mergeMcpBlocksIntoEntries(prev, blocks, selectedDate));
+  };
+
+  const handleSyncMcpConnector = async (
+    connector: McpConnectorItem,
+    extra?: SyncExtraOptions
+  ): Promise<McpExtractedBlock[]> => {
     setIsSyncingId(connector.id);
     try {
       const response = await fetch('/api/mcp/sync', {
@@ -371,13 +405,16 @@ export default function App() {
           provider: connector.provider,
           name: connector.name,
           endpointUrl: connector.endpointUrl,
+          githubTarget: extra?.githubTarget || connector.githubTarget,
+          rawData: extra?.rawData,
+          apiKey: extra?.apiKey,
+          liveWindowSession: extra?.liveWindowSession,
         }),
       });
       if (response.ok) {
         const data = await response.json();
         const blocks: McpExtractedBlock[] = Array.isArray(data.blocks) ? data.blocks : [];
-        setRecentExtracted((prev) => [...blocks, ...prev].slice(0, 12));
-        setLocalEntries((prev) => mergeMcpBlocksIntoEntries(prev, blocks, selectedDate));
+        handleIngestExtractedBlocks(blocks);
         setMcpConnectors((prev) =>
           prev.map((c) =>
             c.id === connector.id
@@ -391,9 +428,11 @@ export default function App() {
               : c
           )
         );
+        return blocks;
       }
+      return [];
     } catch {
-      // ignore
+      return [];
     } finally {
       setIsSyncingId(null);
     }
@@ -405,10 +444,22 @@ export default function App() {
     );
   };
 
-  const handleAddMcpConnector = async (connInput: Omit<McpConnectorItem, 'id'>) => {
+  const handleUpdateMcpConnector = (id: string, patch: Partial<McpConnectorItem>) => {
+    setMcpConnectors((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...patch } : c))
+    );
+  };
+
+  const handleAddMcpConnector = async (
+    connInput: Omit<McpConnectorItem, 'id'>,
+    initialExtra?: SyncExtraOptions
+  ) => {
     const connId = `mcp_${Date.now()}`;
     const newConn: McpConnectorItem = { ...connInput, id: connId };
-    setMcpConnectors((prev) => [...prev, newConn]);
+    setMcpConnectors((prev) => [newConn, ...prev]);
+
+    // Immediately sync and extract data from the newly added connector
+    handleSyncMcpConnector(newConn, initialExtra);
 
     if (user) {
       try {
@@ -571,7 +622,7 @@ export default function App() {
           className="hidden md:flex w-64 shrink-0 flex-col justify-between border-r border-slate-200 bg-slate-900 text-slate-100 p-3.5"
         >
           <div className="space-y-6">
-            {/* Top Brand & New Log Action */}
+            {/* Top Brand & New Chat Action */}
             <div className="flex items-center justify-between px-1.5 pt-1">
               <button
                 type="button"
@@ -582,18 +633,21 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => handleOpenLogModal(new Date().getHours())}
+                onClick={() => {
+                  setActiveSection('assistant');
+                  setChatResetVersion((v) => v + 1);
+                }}
                 className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700 transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" />
-                Log Hour
+                New Chat
               </button>
             </div>
 
-            {/* Primary Tool Navigation (Assistant, Scale Section, Plugin Section) */}
+            {/* Primary Tool Navigation (Chat, Scale, Plugin Store) */}
             <div className="space-y-1">
               <div className="px-2 pb-1 text-[11px] font-medium text-slate-400">
-                Workspace Tools
+                Workspace
               </div>
               <button
                 type="button"
@@ -606,7 +660,7 @@ export default function App() {
               >
                 <span className="flex items-center gap-2.5">
                   <MessageSquare className="h-4 w-4 text-slate-400" />
-                  Chat & Daily Stream
+                  Assistant Chat
                 </span>
               </button>
 
@@ -639,7 +693,7 @@ export default function App() {
               >
                 <span className="flex items-center gap-2.5">
                   <Blocks className="h-4 w-4 text-sky-400" />
-                  Plugin Section (MCP)
+                  Plugin Store
                 </span>
                 <span className="font-mono tabular-nums text-[11px] text-slate-400">
                   {activePluginsCount} active
@@ -647,104 +701,43 @@ export default function App() {
               </button>
             </div>
 
-            {/* Today's Logged Hours in Sidebar (with Gemini AI Explanation) */}
+            {/* Active Plugins Quick Access */}
             <div className="space-y-1.5">
               <div className="px-2 flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold text-slate-300">
-                    Today’s Hours ({entriesForSelectedDate.length})
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    Click any hour to ask Gemini AI
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSection('assistant');
-                      setExternalPromptRequest({
-                        id: Date.now(),
-                        prompt:
-                          'Explain my Today’s Hours in simple terms: what did I do each hour, which hours were productive vs distracted, and what does the pt score mean?',
-                      });
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/25 transition-colors"
-                    title="Ask Gemini AI to explain all of Today's Hours"
-                  >
-                    <Sparkles className="h-2.5 w-2.5" />
-                    Explain
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenLogModal(new Date().getHours())}
-                    className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300 hover:text-white"
-                  >
-                    + Add
-                  </button>
-                </div>
+                <span className="text-[11px] font-medium text-slate-400">
+                  Installed Plugins
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('plugins')}
+                  className="text-[11px] text-sky-400 hover:text-sky-300 transition-colors"
+                >
+                  Browse Store
+                </button>
               </div>
-              <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-                {[...entriesForSelectedDate]
-                  .sort((a, b) => a.hour - b.hour)
-                  .map((entry) => {
-                    const sc = analytics.hourlyScores[entry.hour];
-                    const isDrain =
-                      entry.cognitiveState === 'distracted' ||
-                      sc?.classification === 'Cognitive Drain';
-                    return (
-                      <div
-                        key={entry.id}
-                        className="group flex w-full items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveSection('assistant');
-                            setExternalPromptRequest({
-                              id: Date.now(),
-                              prompt: `Explain my ${formatHourLabel(entry.hour)} hour ("${
-                                entry.activity
-                              }") — why did it score ${
-                                sc?.score ?? 0
-                              }pt and how can I optimize this hour?`,
-                            });
-                          }}
-                          className="min-w-0 flex-1 text-left"
-                          title={`Click to ask Gemini AI about ${formatHourLabel(entry.hour)}`}
-                        >
-                          <div className="flex items-center gap-1.5 truncate">
-                            <span
-                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                                isDrain ? 'bg-amber-400' : 'bg-emerald-400'
-                              }`}
-                            />
-                            <span className="font-mono tabular-nums text-slate-400">
-                              {formatHourLabel(entry.hour)}
-                            </span>
-                            <span className="truncate">{entry.activity}</span>
-                          </div>
-                        </button>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span
-                            className={`font-mono tabular-nums text-[10px] ${
-                              isDrain ? 'text-amber-400' : 'text-emerald-400'
-                            }`}
-                          >
-                            {sc?.score ?? 0}pt
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenLogModal(entry.hour, entry)}
-                            className="rounded px-1.5 py-0.5 text-[10px] text-slate-400 hover:bg-slate-700 hover:text-white"
-                            title="Edit this hour"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="space-y-1">
+                {mcpConnectors
+                  .filter((c) => c.enabled)
+                  .map((conn) => (
+                    <button
+                      key={conn.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPluginId(conn.id);
+                        setActiveSection('plugins');
+                      }}
+                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
+                        activeSection === 'plugins' && selectedPluginId === conn.id
+                          ? 'bg-slate-800 text-white font-medium'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                        <span className="truncate">{conn.name}</span>
+                      </span>
+                    </button>
+                  ))}
               </div>
             </div>
           </div>
@@ -799,7 +792,11 @@ export default function App() {
       )}
 
       {/* Main Right ChatGPT Tool Column */}
-      <div className="flex flex-1 flex-col min-w-0 md:overflow-y-auto bg-white">
+      <div
+        ref={mainScrollRef}
+        data-scroll-container="main"
+        className="flex flex-1 flex-col min-w-0 md:overflow-y-auto bg-white"
+      >
         {/* Clean 3-Zone Top Header Bar */}
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white/95 backdrop-blur-xs px-4 py-3 sm:px-6">
           {/* Zone 1: Sidebar Toggle + Brand Selector */}
@@ -864,15 +861,15 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Zone 3: Primary Action */}
+          {/* Zone 3: Quick Plugin Store Action */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => handleOpenLogModal(new Date().getHours())}
+              onClick={() => setActiveSection('plugins')}
               className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-slate-800 transition-colors whitespace-nowrap"
             >
-              <Plus className="h-3.5 w-3.5" />
-              Log Hour
+              <Blocks className="h-3.5 w-3.5" />
+              Install Plugins
             </button>
           </div>
         </header>
@@ -887,6 +884,7 @@ export default function App() {
               waypoints={gpsWaypoints}
               activePluginsCount={activePluginsCount}
               isSyncingMiniMe={isSyncingId === 'mcp-minime'}
+              chatResetVersion={chatResetVersion}
               externalPromptRequest={externalPromptRequest}
               onEditHour={(hr, existing) => handleOpenLogModal(hr, existing)}
               onScheduleHourFromAgent={(block) => {
@@ -926,10 +924,10 @@ export default function App() {
               onAddWaypoint={(wp) => {
                 setGpsWaypoints((prev) => [...prev, { ...wp, id: `gps_${Date.now()}` }]);
               }}
-              onQuickSyncMiniMe={() => {
+              onQuickSyncMiniMe={async () => {
                 const miniMeConn =
                   mcpConnectors.find((c) => c.provider === 'minime') || DEFAULT_MCP_CONNECTORS[0];
-                handleSyncMcpConnector(miniMeConn);
+                return handleSyncMcpConnector(miniMeConn);
               }}
               onNavigateSection={(sec) => setActiveSection(sec)}
             />
@@ -993,10 +991,15 @@ export default function App() {
               recentExtracted={recentExtracted}
               isSyncingId={isSyncingId}
               waypoints={gpsWaypoints}
+              selectedPluginId={selectedPluginId}
+              onSelectPluginId={setSelectedPluginId}
+              onNavigateToScale={() => setActiveSection('scale')}
               onSyncConnector={handleSyncMcpConnector}
               onToggleConnector={handleToggleMcpConnector}
               onAddConnector={handleAddMcpConnector}
+              onUpdateConnector={handleUpdateMcpConnector}
               onDeleteConnector={handleDeleteMcpConnector}
+              onIngestExtractedBlocks={handleIngestExtractedBlocks}
               onPushWhatsAppCheckin={handlePushWhatsAppCheckin}
               onAddWaypoint={(wp) => {
                 setGpsWaypoints((prev) => [...prev, { ...wp, id: `gps_${Date.now()}` }]);

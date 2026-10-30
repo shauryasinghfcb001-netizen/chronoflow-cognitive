@@ -1,40 +1,57 @@
-# ChronoFlow — AI Cognitive & Daily Telemetry Workspace
+# ChronoFlow — Cognitive & Daily Telemetry Workspace
 
-**ChronoFlow** is a ChatGPT-style AI workspace and cognitive telemetry platform powered by **Google Gemini (`@google/genai`)**, **React 19**, **Tailwind CSS**, **Express**, and **Firebase (Firestore & Google Auth)**.
+**ChronoFlow** is a full-stack **Cognitive Telemetry, Screen Hygiene, GPS Movement, and AI Daily Planning Workspace** built with **React 19, TypeScript, Tailwind CSS, Express, Firebase (Firestore & Google Auth), and the Google Gemini API (`@google/genai`)**.
 
-It combines a conversational AI assistant with hourly cognitive state tracking, autonomous **MCP (Model Context Protocol)** screen & agent integrations (**MiniMe**, **Codegen**, **WhatsApp Bridge**, **GitHub**, **Linear**), and 3 core autonomous skills (**GPS Location Tracker**, **Voice Day Summary & Transcription**, and **Talk-to-Plan Next Day**).
+Designed around a clean, conversational **ChatGPT-style interface**, ChronoFlow tracks how you spend every hour of your day (`Today's Hours`), scores each hour from `0–100pt` based on cognitive focus, screen efficiency, and physical posture/motion, computes a unified **1–10 Daily Efficiency Scale**, and connects with external **Model Context Protocol (MCP) Plugins** (**MiniMe Screen Watcher**, **Codegen.com**, and **WhatsApp Telemetry**).
 
 ---
 
 ## ✨ Key Features
 
-### 1. 💬 ChatGPT-Style Gemini AI Workspace (`/api/gemini/chat`)
-- **Ask Anything + Daily Context Awareness**: Ask general questions, coding questions, or specific questions about your schedule, cognitive load, and screen activity.
-- **Today's Hours Interactive Breakdown**:
-  - Visualizes every tracked hour (`08:00` – `17:00`) with plain-English badges (`Deep Focus`, `Shallow Work`, `Distracted`, `Meeting`, `Rest`), energy percentage, active desktop app, and physical motion state.
-  - One-click **"✨ Explain"** and **"Ask Gemini"** buttons on both the left sidebar and main canvas so Gemini explains your day, energy peaks, and bottlenecks in plain English.
-- **Natural Language Scheduling (`scheduleCognitiveHour` Function Calling)**:
-  - Tell the assistant *"Schedule Deep Focus at 14:00 for System Architecture with 90% energy"* and Gemini automatically updates your hourly timeline while answering your prompt cleanly.
+### 1. Conversational Gemini AI Assistant & Daily Stream (`Chat` Tab)
+- **Context-Aware Q&A (`/api/gemini/chat`)**: Ask anything about your day, screen habits, productivity peaks, or schedule. Gemini receives your live `Today's Hours` timeline, `1–10 Efficiency Scale`, daily goals, and GPS trajectory.
+- **Natural-Language Smart Scheduling**: Tell ChronoFlow *"Schedule 09:00 for Deep Architecture Work"* or click **"Plan my schedule for tomorrow"** to automatically populate hourly blocks via Gemini Function Calling (`scheduleCognitiveHour`).
+- **End-of-Day Executive Transcription Digest (`/api/gemini/daily-summary`)**: Generates a structured daily summary highlighting productive peaks vs. cognitive drain hours, screen efficiency, and a 3-block action plan for tomorrow.
+- **Voice Note Transcription (`/api/gemini/transcribe`)**: Record voice notes directly from the composer bar and transcribe them with Gemini multimodal audio analysis.
+- **Real-Time Live Voice Co-Pilot (`/api/live` WebSocket)**: Bidirectional 16kHz PCM audio streaming with **Gemini Live (`gemini-3.8-live`)** and real-time voice tool calling.
+- **GPS Trajectory & Google Maps Grounding (`/api/gemini/maps-grounding`)**: Log live browser Geolocation coordinates, calculate Haversine walking distance (`km`), and discover nearby quiet workspaces, cafes, and walking recovery trails grounded on Google Maps.
 
-### 2. 📊 Scale & Analytics View (`Recharts` + Visual Heatmap)
-- **Weekly Cognitive Trend Chart**: 7-day stacked bar & area visualization comparing **Deep Focus (hrs)** vs. **Distracted (hrs)** and weekly efficiency scores (`82%` avg).
-- **Hourly Energy & Motion Matrix Heatmap**: Color-coded 24-hour matrix representing cognitive state, energy intensity (`0–100%`), and physical motion state (`sedentary`, `light_activity`, `active_transit`, `exercising`).
-- **MiniMe Screen Telemetry Breakdown**: Aggregates active window titles, productive vs. distracted minutes, and context-switch counts per hour.
+### 2. Today's Hours — Interactive Cognitive Timeline (`0–100pt`)
+- **Hour-by-Hour Telemetry (`00:00`–`23:00`)**: Each logged hour tracks:
+  - **Activity Description** & **Cognitive State** (`Deep Focus`, `Creative Synthesis`, `Active Learning`, `Shallow / Admin`, `Intentional Recovery`, or `Distracted / Drift`)
+  - **Screen Hygiene**: Productive screen minutes vs. total screen minutes (`0–60m`)
+  - **Physical Motion & Steps**: `Sedentary Desk`, `Standing Posture`, `Active Walk / Pacing`, or `High-Intensity Workout`
+  - **Subjective Energy (`1–5`)**
+- **1-Click Gemini Hour Breakdown**: Click any hour in the left sidebar or in the **Today's Hours** timeline card to have Gemini explain why that hour scored its `pt` rating and how to optimize it.
 
-### 3. 🔌 Plugin Store & MCP Hub (Model Context Protocol)
-- **MiniMe Screen & Efficiency Watcher**: Monitors active windows, IDE sessions, and browser tabs to organize your hourly timeline automatically.
-- **Codegen Autonomous PR Agent**: Connects autonomous code generation and PR review telemetry into your daily cognitive blocks.
-- **WhatsApp Personal Agent Bridge**: Webhook & MCP bridge to query or update your daily schedule straight from WhatsApp.
-- **Custom MCP Server Registration**: Add any custom MCP endpoint (`stdio` or `SSE` JSON-RPC) dynamically.
+### 3. Unified 1–10 Daily Efficiency Scale (`Scale` Tab)
+Synthesizes your entire day into a single **1.0 to 10.0 Efficiency Scale** across four weighted dimensions:
+1. **Focus Quality (35%)** — Weighted cognitive state intensity across logged hours
+2. **Screen Hygiene (25%)** — Ratio of productive screen time vs. passive screen drift
+3. **Physical Motion & GPS (20%)** — Active movement hours, step count, and GPS waypoints
+4. **Goal Execution (20%)** — Daily target completion rate
 
-### 4. 🎙️ 3 Core Autonomous Agent Skills
-1. **📍 Live GPS & Transit Context Skill**: Tracks physical coordinates, speed, and place context (`Home Office`, `Tech Hub`, `In Transit`) and correlates movement with cognitive energy.
-2. **🔊 Daily Audio Summary & Transcription (`/api/gemini/daily-summary`)**: Generates an executive briefing of everything you accomplished today with Web Speech API voice playback and full transcript export.
-3. **🗣️ Talk-to-Plan Next Day (`/api/gemini/plan-day`)**: Speak or type how you want tomorrow structured, and the agent builds or updates your hourly blocks in a continuous autonomous loop.
+### 4. MCP Plugin Store & External Agent Webhooks (`Plugins` Tab)
+- **MiniMe (Screen & Efficiency MCP)**: Tracks active window focus (VS Code, Terminal, Figma, Docs), flags passive screen drift, and generates per-hour efficiency coaching tips.
+- **Codegen.com (Autonomous Coding Agent)**: Syncs autonomous PR reviews, test suites, and coding sprints into your hourly timeline.
+- **WhatsApp (Chat & Voice Log Bridge)**: Converts timestamped self-messages and voice notes into structured hourly cognitive logs.
+- **Custom MCP Connector & Webhook Ingestion**: Register any custom MCP server URL or push external telemetry directly to `POST /api/mcp/ingest`.
 
-### 5. 🔐 Cloud Sync & Security
-- **Firebase Authentication & Firestore**: Sign in with Google to persist hourly records, MCP configurations, and telemetry logs across devices, with automatic local storage fallback when offline.
-- **Built-in Security & QA Verification Suite**: Inspect API health, XSS/injection sanitization, MCP schema validation, and Firestore rules compliance.
+### 5. Dual Persistence (Offline-First LocalStorage + Firebase Cloud Sync)
+- Works immediately out of the box with **LocalStorage** and curated research-backed templates (*Ultradian Maker Protocol*, *Executive Deep-Work Split*, *High-Metabolic Hybrid*).
+- Sign in with **Google Authentication** to sync hourly entries and daily goals in real time with **Cloud Firestore** under strict owner-only security rules.
+
+---
+
+## 🧠 How the Scoring Engine Works
+
+Each logged hour in `src/utils/cognitiveEngine.ts` receives a deterministic **Hourly Productivity Score (`0–100pt`)**:
+
+$$\text{Hourly Score} = \text{clamp}_{0..100}\left(\text{round}\left(0.55 \times \text{FocusWeight} + 0.25 \times \text{ScreenEfficiency} + 0.20 \times \text{EnergyScore} + \text{MotionBonus}\right)\right)$$
+
+- **Productive Peak (`75–100pt`)**: High-leverage deep work, creative synthesis, or active metabolic recovery.
+- **Effective Flow (`50–74pt`)**: Solid execution or structured administrative maintenance.
+- **Cognitive Drain (`0–49pt`)**: High context switching or passive, unintentional screen time.
 
 ---
 
@@ -42,36 +59,56 @@ It combines a conversational AI assistant with hourly cognitive state tracking, 
 
 | Layer | Technology |
 | :--- | :--- |
-| **Frontend** | React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Recharts, Motion |
-| **AI Engine** | Google Gemini SDK (`@google/genai`) with Structured Function Calling |
-| **Backend** | Node.js, Express (`server.ts` with Vite middleware) |
-| **Database & Auth** | Firebase Firestore + Google OAuth (`firebase/auth`, `firebase/firestore`) |
-| **Testing** | Node.js Native Test Runner (`node:test`) + Playwright E2E Verification |
+| **Frontend** | React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Vite 6 |
+| **Backend** | Node.js, Express, `tsx`, WebSocket (`ws`) |
+| **AI & Multimodal** | Google GenAI SDK (`@google/genai`) — `gemini-3.1-flash-lite`, `gemini-3.8-flash`, `gemini-2.5-flash` (Google Maps Grounding), `gemini-3.8-live` (Real-time Audio WebSocket) |
+| **Database & Auth** | Firebase Authentication (Google Sign-In) & Cloud Firestore |
+| **Testing** | Node.js native test runner (`node --import tsx --test`) |
+
+---
+
+## 📂 Project Structure
+
+```text
+├── server.ts                              # Express API server, Gemini routes, MCP hub & Live WebSocket proxy
+├── src/
+│   ├── App.tsx                            # Main ChatGPT-style shell, sidebar timeline & Firebase sync
+│   ├── components/
+│   │   ├── ChatGptAssistantCanvas.tsx     # Conversational Gemini assistant, voice recorder & Today's Hours explainer
+│   │   ├── ScaleSectionView.tsx           # 1–10 Efficiency Scale breakdown & hourly bar chart
+│   │   ├── PluginStoreSectionView.tsx     # MCP Plugin Store (MiniMe, Codegen, WhatsApp & custom connectors)
+│   │   └── HourlyLogModal.tsx             # Modal for logging/editing individual hourly telemetry blocks
+│   ├── utils/
+│   │   ├── cognitiveEngine.ts             # Pure TypeScript scoring engine, GPS Haversine math & templates
+│   │   └── __tests__/
+│   │       └── cognitiveEngine.test.ts    # Unit & adversarial tests for the scoring and telemetry engine
+│   └── firebase.ts                        # Firebase Auth & Firestore client initialization
+├── firestore.rules                        # Owner-only Firestore security rules
+└── package.json
+```
 
 ---
 
 ## 🚀 Getting Started Locally
 
-### 1. Clone the repository
-```bash
-git clone https://github.com/<your-username>/chronoflow.git
-cd chronoflow
-```
+### Prerequisites
+- **Node.js** `v18+` (or `v20+` recommended)
+- A **Google Gemini API Key** (`GEMINI_API_KEY`)
 
-### 2. Install dependencies
+### 1. Clone & Install Dependencies
 ```bash
+git clone <your-github-repo-url>
+cd chronoflow
 npm install
 ```
 
-### 3. Configure environment variables
-Create a `.env` file in the root directory (see `.env.example`):
+### 2. Configure Environment Variables
+Create a `.env` file in the project root (see `.env.example`):
 ```env
-GEMINI_API_KEY=your_google_gemini_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-*(Optional)* If you want to use your own Firebase project, update `firebase-applet-config.json` with your Firebase Web App credentials.
-
-### 4. Start the development server
+### 3. Start the Full-Stack Development Server
 ```bash
 npm run dev
 ```
@@ -79,49 +116,53 @@ Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## 🧪 Running Tests & Building for Production
+## 🔌 API & MCP Endpoints
 
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/gemini/chat` | Context-aware Gemini assistant Q&A and natural-language hour scheduler |
+| `POST` | `/api/gemini/daily-summary` | Generates an End-of-Day Executive Transcription Digest |
+| `POST` | `/api/gemini/transcribe` | Multimodal audio note transcription via Gemini |
+| `POST` | `/api/gemini/maps-grounding` | Location-aware focus spots & walking trails grounded with Google Maps |
+| `WS` | `/api/live` | Bidirectional WebSocket proxy for real-time Gemini Live voice sessions |
+| `GET` | `/api/mcp/manifest` | Returns available MCP plugins and capabilities |
+| `POST` | `/api/mcp/sync` | Pulls hourly telemetry blocks from MiniMe, Codegen, or WhatsApp MCP |
+| `POST` | `/api/mcp/ingest` | Webhook endpoint for external agents to push hourly telemetry blocks |
+
+### Example: Push Telemetry via MCP Webhook
 ```bash
-# Run unit tests for cognitive metrics, MCP telemetry, and security validation
-npm test
-
-# Type-check with TypeScript
-npm run lint
-
-# Build production bundle
-npm run build
-
-# Start production server
-npm start
+curl -X POST http://localhost:3000/api/mcp/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hour": 10,
+    "activity": "Deep Rust & TypeScript compiler optimization",
+    "cognitiveState": "deep_focus",
+    "screenMinutes": 52,
+    "productiveScreenMinutes": 50,
+    "motionState": "standing",
+    "stepsCount": 320,
+    "energyLevel": 5,
+    "sourceAgent": "MiniMe Screen & Efficiency Agent"
+  }'
 ```
 
 ---
 
-## 📂 Project Structure
+## 🧪 Running Tests & Production Build
 
-```text
-├── server.ts                              # Express API server & Gemini AI endpoints (/api/gemini/*)
-├── src/
-│   ├── App.tsx                            # Main ChatGPT-style shell, sidebar, & view switcher
-│   ├── components/
-│   │   ├── ChatGptAssistantCanvas.tsx     # Primary Gemini chat, Today's Hours explainer & 3 skills
-│   │   ├── ScaleAnalyticsView.tsx         # Recharts Weekly Cognitive Trend & telemetry analytics
-│   │   ├── HourlyMatrixView.tsx           # Visual heatmap & 24-hour energy/motion inspector
-│   │   ├── McpPluginStoreModal.tsx        # MiniMe, Codegen, WhatsApp & custom MCP manager
-│   │   ├── AutonomousSkillsHub.tsx        # GPS, Voice Transcription & Next-Day Planner loop
-│   │   └── SecurityVerificationModal.tsx  # Built-in QA & cybersecurity audit suite
-│   ├── utils/
-│   │   ├── cognitiveMetrics.ts            # Pure cognitive load & weekly trend calculations
-│   │   ├── mcpEngine.ts                   # MiniMe screen watcher & MCP payload normalizer
-│   │   └── agentSkillsEngine.ts           # GPS, speech synthesis & schedule parser utilities
-│   ├── firebase.ts                        # Firebase Auth & Firestore initialization
-│   └── types.ts                           # TypeScript interfaces for hourly records & MCPs
-├── firestore.rules                        # Firestore security rules
-└── README.md                              # Project documentation
+```bash
+# Run unit & security tests for the cognitive telemetry engine
+npm test
+
+# Type-check & build production bundle
+npm run build
+
+# Run production server
+npm start
 ```
 
 ---
 
 ## 📄 License
 
-MIT License — feel free to fork, customize, and connect your own MCP agents.
+MIT License — free to use, modify, and distribute.

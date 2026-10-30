@@ -552,6 +552,8 @@ export interface McpConnectorItem {
   description: string;
   enabled: boolean;
   lastSyncedAt?: string;
+  githubTarget?: string;
+  apiKeyHint?: string;
 }
 
 export interface McpExtractedBlock {
@@ -575,16 +577,17 @@ export const DEFAULT_MCP_CONNECTORS: McpConnectorItem[] = [
     provider: 'minime',
     endpointUrl: 'http://localhost:4120/mcp/minime',
     description:
-      'Monitors active window titles, IDE vs. passive browser time, and generates hourly efficiency coaching.',
+      'Watches active desktop windows, browser tabs, and screen time to extract and organize your daily schedule automatically.',
     enabled: true,
   },
   {
     id: 'mcp-codegen',
-    name: 'Codegen Autonomous Dev MCP',
+    name: 'Codex / Codegen Autonomous Dev Agent',
     provider: 'codegen',
-    endpointUrl: 'https://api.codegen.com/v1/mcp',
+    endpointUrl: 'https://api.github.com/repos/modelcontextprotocol/servers/commits',
+    githubTarget: 'modelcontextprotocol/servers',
     description:
-      'Extracts automated PR syntheses, test runs, and engineering deep-work blocks into your timeline.',
+      'Connects to Codex, Codegen, or GitHub repositories to extract real commits, PRs, test runs, and coding sessions.',
     enabled: true,
   },
   {
@@ -593,10 +596,355 @@ export const DEFAULT_MCP_CONNECTORS: McpConnectorItem[] = [
     provider: 'whatsapp',
     endpointUrl: '/api/mcp/ingest',
     description:
-      'Receives voice/text hourly check-ins, off-screen walks, and habit updates directly from your WhatsApp agent.',
+      'Connects your WhatsApp agent via live webhook or chat export to extract voice/text check-ins and schedule updates.',
     enabled: true,
   },
+  {
+    id: 'mcp-activitywatch',
+    name: 'ActivityWatch Open-Source',
+    provider: 'custom_mcp',
+    endpointUrl: 'http://localhost:5600/api/0/buckets',
+    description:
+      'Open-source cross-platform time tracker that records active apps, window titles, browser tabs, and AFK time.',
+    enabled: false,
+  },
+  {
+    id: 'mcp-screenpipe',
+    name: 'ScreenPipe 24/7 Screen & Mic AI',
+    provider: 'custom_mcp',
+    endpointUrl: 'http://localhost:3030/mcp',
+    description:
+      'Open-source local screen and audio capture engine that indexes everything you work on for structured recall.',
+    enabled: false,
+  },
+  {
+    id: 'mcp-wakatime',
+    name: 'WakaTime IDE & Coding Tracker',
+    provider: 'custom_mcp',
+    endpointUrl: 'https://api.wakatime.com/api/v1/users/current/heartbeats',
+    description:
+      'Open-source editor plugin for VS Code, Cursor, JetBrains, and Neovim that tracks coding time per project.',
+    enabled: false,
+  },
 ];
+
+export function inferCognitiveAndMotionFromText(text: string): {
+  cognitiveState: CognitiveState;
+  motionState: MotionState;
+  screenMinutes: number;
+  productiveScreenMinutes: number;
+  stepsCount: number;
+} {
+  const lower = text.toLowerCase();
+  const minMatch = lower.match(/(\d{1,2})\s*(?:m|min|mins|minutes)\b/);
+  const parsedMins = minMatch ? Math.max(0, Math.min(60, Number(minMatch[1]))) : null;
+
+  if (
+    lower.includes('walk') ||
+    lower.includes('outdoor') ||
+    lower.includes('run') ||
+    lower.includes('gym') ||
+    lower.includes('workout') ||
+    lower.includes('steps')
+  ) {
+    const isWorkout = lower.includes('workout') || lower.includes('gym') || lower.includes('run');
+    const scr = parsedMins !== null ? Math.min(15, parsedMins) : 5;
+    return {
+      cognitiveState: 'recovery',
+      motionState: isWorkout ? 'workout' : 'walking',
+      screenMinutes: scr,
+      productiveScreenMinutes: scr,
+      stepsCount: isWorkout ? 4800 : 3400,
+    };
+  }
+
+  if (
+    lower.includes('youtube') ||
+    lower.includes('netflix') ||
+    lower.includes('tiktok') ||
+    lower.includes('reddit') ||
+    lower.includes('twitter') ||
+    lower.includes('doomscroll') ||
+    lower.includes('distract') ||
+    lower.includes('social')
+  ) {
+    const scr = parsedMins ?? 48;
+    return {
+      cognitiveState: 'distracted',
+      motionState: 'sedentary',
+      screenMinutes: scr,
+      productiveScreenMinutes: Math.round(scr * 0.25),
+      stepsCount: 65,
+    };
+  }
+
+  if (
+    lower.includes('figma') ||
+    lower.includes('design') ||
+    lower.includes('rfc') ||
+    lower.includes('spec') ||
+    lower.includes('writing') ||
+    lower.includes('ui')
+  ) {
+    const scr = parsedMins ?? 50;
+    return {
+      cognitiveState: 'creative',
+      motionState: 'standing',
+      screenMinutes: scr,
+      productiveScreenMinutes: Math.round(scr * 0.94),
+      stepsCount: 260,
+    };
+  }
+
+  if (
+    lower.includes('paper') ||
+    lower.includes('read') ||
+    lower.includes('study') ||
+    lower.includes('docs') ||
+    lower.includes('course') ||
+    lower.includes('research')
+  ) {
+    const scr = parsedMins ?? 45;
+    return {
+      cognitiveState: 'learning',
+      motionState: 'standing',
+      screenMinutes: scr,
+      productiveScreenMinutes: Math.round(scr * 0.92),
+      stepsCount: 220,
+    };
+  }
+
+  if (
+    lower.includes('email') ||
+    lower.includes('slack') ||
+    lower.includes('triage') ||
+    lower.includes('inbox') ||
+    lower.includes('meeting') ||
+    lower.includes('sync')
+  ) {
+    const scr = parsedMins ?? 45;
+    return {
+      cognitiveState: 'shallow_work',
+      motionState: 'sedentary',
+      screenMinutes: scr,
+      productiveScreenMinutes: Math.round(scr * 0.8),
+      stepsCount: 130,
+    };
+  }
+
+  const scr = parsedMins ?? 54;
+  return {
+    cognitiveState: 'deep_focus',
+    motionState: 'standing',
+    screenMinutes: scr,
+    productiveScreenMinutes: Math.round(scr * 0.95),
+    stepsCount: 250,
+  };
+}
+
+export function parseRawTelemetryToBlocks(
+  rawInput: string,
+  provider: McpProviderType = 'custom_mcp',
+  agentName = 'MCP Extractor'
+): McpExtractedBlock[] {
+  const trimmed = (rawInput || '').trim();
+  if (!trimmed) return [];
+
+  const blocksByHour = new Map<number, McpExtractedBlock>();
+  const safeAgent = sanitizeTextInput(agentName, 60) || 'MCP Extractor';
+
+  // 1. Try JSON parsing first (supports arrays of events, GitHub commits/events, ActivityWatch buckets, or single objects)
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const items: unknown[] = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray((parsed as Record<string, unknown>).events)
+        ? ((parsed as Record<string, unknown>).events as unknown[])
+        : Array.isArray((parsed as Record<string, unknown>).blocks)
+        ? ((parsed as Record<string, unknown>).blocks as unknown[])
+        : Array.isArray((parsed as Record<string, unknown>).commits)
+        ? ((parsed as Record<string, unknown>).commits as unknown[])
+        : Array.isArray((parsed as Record<string, unknown>).data)
+        ? ((parsed as Record<string, unknown>).data as unknown[])
+        : [parsed];
+
+      items.forEach((rawItem, idx) => {
+        if (!rawItem || typeof rawItem !== 'object') return;
+        const obj = rawItem as Record<string, unknown>;
+
+        // Determine hour from hour field, timestamp, created_at, or commit.author.date
+        let hour = typeof obj.hour === 'number' && Number.isFinite(obj.hour) ? Math.floor(obj.hour) : -1;
+        const dateCandidate =
+          obj.timestamp ||
+          obj.created_at ||
+          obj.date ||
+          ((obj.commit as Record<string, unknown> | undefined)?.author as Record<string, unknown> | undefined)?.date;
+
+        if (hour < 0 && typeof dateCandidate === 'string') {
+          const d = new Date(dateCandidate);
+          if (!Number.isNaN(d.getTime())) {
+            hour = d.getHours();
+          }
+        }
+        if (hour < 0 || hour > 23) {
+          hour = (9 + idx) % 24;
+        }
+
+        // Determine activity description from various schema shapes (GitHub commit, ActivityWatch data, MiniMe, or standard)
+        const commitObj = obj.commit as Record<string, unknown> | undefined;
+        const dataObj = obj.data as Record<string, unknown> | undefined;
+        const repoObj = obj.repo as Record<string, unknown> | undefined;
+
+        let rawTitle = '';
+        if (typeof obj.activity === 'string') {
+          rawTitle = obj.activity;
+        } else if (commitObj && typeof commitObj.message === 'string') {
+          const firstLine = commitObj.message.split('\n')[0];
+          const sha = typeof obj.sha === 'string' ? obj.sha.slice(0, 7) : '';
+          rawTitle = `Commit ${sha ? `(${sha}) ` : ''}: ${firstLine}`;
+        } else if (typeof obj.type === 'string' && repoObj && typeof repoObj.name === 'string') {
+          const payload = obj.payload as Record<string, unknown> | undefined;
+          const commits = Array.isArray(payload?.commits) ? payload.commits : [];
+          const firstMsg =
+            commits.length > 0 && typeof (commits[0] as Record<string, unknown>).message === 'string'
+              ? String((commits[0] as Record<string, unknown>).message).split('\n')[0]
+              : obj.type;
+          rawTitle = `[${repoObj.name}] ${firstMsg}`;
+        } else if (dataObj && (typeof dataObj.app === 'string' || typeof dataObj.title === 'string')) {
+          rawTitle = `${dataObj.app || 'App'}: ${dataObj.title || 'Active Window Session'}`;
+        } else if (typeof obj.title === 'string' || typeof obj.message === 'string' || typeof obj.text === 'string') {
+          rawTitle = String(obj.title || obj.message || obj.text);
+        }
+
+        const cleanActivity = sanitizeTextInput(rawTitle, 160);
+        if (!cleanActivity) return;
+
+        const inferred = inferCognitiveAndMotionFromText(cleanActivity);
+        const durationSec = typeof obj.duration === 'number' ? obj.duration : null;
+        const screenMinutes =
+          typeof obj.screenMinutes === 'number'
+            ? Math.max(0, Math.min(60, Math.round(obj.screenMinutes)))
+            : durationSec !== null
+            ? Math.max(5, Math.min(60, Math.round(durationSec / 60)))
+            : inferred.screenMinutes;
+        const productiveScreenMinutes =
+          typeof obj.productiveScreenMinutes === 'number'
+            ? Math.max(0, Math.min(screenMinutes, Math.round(obj.productiveScreenMinutes)))
+            : Math.min(screenMinutes, inferred.productiveScreenMinutes);
+
+        blocksByHour.set(hour, {
+          hour,
+          activity: cleanActivity,
+          appBreakdown: Array.isArray(obj.appBreakdown)
+            ? obj.appBreakdown.map((x) => sanitizeTextInput(x, 60)).filter(Boolean)
+            : [`${safeAgent}: ${screenMinutes}m`],
+          cognitiveState: obj.cognitiveState
+            ? normalizeCognitiveState(obj.cognitiveState)
+            : inferred.cognitiveState,
+          screenMinutes,
+          productiveScreenMinutes,
+          motionState: obj.motionState ? normalizeMotionState(obj.motionState) : inferred.motionState,
+          stepsCount:
+            typeof obj.stepsCount === 'number'
+              ? Math.max(0, Math.min(15000, Math.round(obj.stepsCount)))
+              : inferred.stepsCount,
+          energyLevel:
+            typeof obj.energyLevel === 'number'
+              ? Math.max(1, Math.min(5, Math.round(obj.energyLevel)))
+              : inferred.cognitiveState === 'distracted'
+              ? 2
+              : 4,
+          efficiencyCoaching:
+            sanitizeTextInput(obj.efficiencyCoaching, 220) ||
+            `Extracted from ${safeAgent} live data payload (${productiveScreenMinutes}/${screenMinutes}m productive).`,
+          sourceAgent: safeAgent,
+        });
+      });
+
+      if (blocksByHour.size > 0) {
+        return Array.from(blocksByHour.values()).sort((a, b) => a.hour - b.hour);
+      }
+    } catch {
+      // Fall through to line-by-line text/log/CSV/WhatsApp parser
+    }
+  }
+
+  // 2. Parse line-by-line (WhatsApp exports, git logs, CSV rows, MiniMe text logs, natural language lines)
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 2);
+
+  lines.forEach((line, idx) => {
+    // Skip CSV header rows
+    if (idx === 0 && /^timestamp\s*,|^hour\s*,|^date\s*,/i.test(line)) return;
+
+    let hour: number | null = null;
+    let content = line;
+
+    // Match WhatsApp format: [10/29/26, 2:15 PM] Name: Message or 10/29/26, 14:15 - Name: Message
+    const waMatch = line.match(
+      /^\[?\d{1,2}\/\d{1,2}\/\d{2,4},?\s+(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM|am|pm)?\]?\s*(?:-\s*)?(?:[^:]{1,35}:\s*)?(.+)$/
+    );
+    if (waMatch) {
+      let h = Number(waMatch[1]);
+      const meridiem = (waMatch[3] || '').toUpperCase();
+      if (meridiem === 'PM' && h < 12) h += 12;
+      if (meridiem === 'AM' && h === 12) h = 0;
+      hour = Math.max(0, Math.min(23, h));
+      content = waMatch[4];
+    } else {
+      // Match explicit time in line like "09:00", "14:30", "9am", "2pm"
+      const time24 = line.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+      const time12 = line.match(/\b(1[0-2]|0?[1-9])\s*(am|pm)\b/i);
+      if (time24) {
+        hour = Number(time24[1]);
+        content = line.replace(time24[0], '').replace(/^[\s\-:,|]+/, '');
+      } else if (time12) {
+        let h = Number(time12[1]);
+        const mer = time12[2].toLowerCase();
+        if (mer === 'pm' && h < 12) h += 12;
+        if (mer === 'am' && h === 12) h = 0;
+        hour = h;
+        content = line.replace(time12[0], '').replace(/^[\s\-:,|]+/, '');
+      }
+    }
+
+    if (hour === null || !Number.isFinite(hour)) {
+      hour = (9 + idx) % 24;
+    }
+
+    const cleanActivity = sanitizeTextInput(content, 160);
+    if (!cleanActivity) return;
+
+    const inferred = inferCognitiveAndMotionFromText(cleanActivity);
+    const providerLabel =
+      provider === 'minime'
+        ? 'MiniMe Screen Agent'
+        : provider === 'codegen'
+        ? 'Codex / Codegen Agent'
+        : provider === 'whatsapp'
+        ? 'WhatsApp Agent'
+        : safeAgent;
+
+    blocksByHour.set(hour, {
+      hour,
+      activity: cleanActivity,
+      appBreakdown: [`${providerLabel}: ${inferred.screenMinutes}m`],
+      cognitiveState: inferred.cognitiveState,
+      screenMinutes: inferred.screenMinutes,
+      productiveScreenMinutes: inferred.productiveScreenMinutes,
+      motionState: inferred.motionState,
+      stepsCount: inferred.stepsCount,
+      energyLevel: inferred.cognitiveState === 'distracted' ? 2 : 4,
+      efficiencyCoaching: `${providerLabel} extracted real activity for ${formatHourLabel(hour)}.`,
+      sourceAgent: providerLabel,
+    });
+  });
+
+  return Array.from(blocksByHour.values()).sort((a, b) => a.hour - b.hour);
+}
 
 export function mergeMcpBlocksIntoEntries(
   existingEntries: HourlyEntry[],
